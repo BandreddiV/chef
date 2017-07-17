@@ -1,0 +1,289 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description" : "AWS CloudFormation Sample Template LAMP_Single_Instance: Create a LAMP stack using a single EC2 instance and a local MySQL database for storage. This template demonstrates using the AWS CloudFormation bootstrap scripts to install the packages and files necessary to deploy the Apache web server, PHP and MySQL at instance launch time. **WARNING** This template creates an Amazon EC2 instance. You will be billed for the AWS resources used if you create a stack from this template.",
+
+"Parameters" : {
+  "KeyName": {
+    "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+    "Type": "AWS::EC2::KeyPair::KeyName",
+    "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+  }
+},
+"Resources" : {
+"VPC" : {
+    "Type" : "AWS::EC2::VPC",
+    "Properties" : {
+      "CidrBlock" : "10.0.0.0/16",
+      "EnableDnsSupport": "true",
+      "EnableDnsHostnames": "true",
+      "InstanceTenancy": "default",
+      "Tags" : [ {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} } ]
+    }
+  },
+  "venkatPublicSubnet1": {
+          "Type": "AWS::EC2::Subnet",
+          "Properties": {
+              "VpcId": { "Ref": "VPC" },
+              "AvailabilityZone": "us-east-1a",
+              "CidrBlock": "10.0.0.0/24",
+              "MapPublicIpOnLaunch": "true"
+          }
+      },
+      "venkatPublicSubnet2": {
+          "Type": "AWS::EC2::Subnet",
+          "Properties": {
+              "VpcId": { "Ref": "VPC" },
+              "AvailabilityZone": "us-east-1b",
+              "CidrBlock": "10.0.1.0/24",
+              "MapPublicIpOnLaunch": "true"
+          }
+      },
+      "venkatPrivateSubnet1": {
+          "Type": "AWS::EC2::Subnet",
+          "Properties": {
+              "VpcId": { "Ref": "VPC" },
+              "AvailabilityZone": "us-east-1a",
+              "CidrBlock": "10.0.2.0/24",
+              "MapPublicIpOnLaunch": "true"
+          }
+      },
+      "venkatPrivateSubnet2": {
+          "Type": "AWS::EC2::Subnet",
+          "Properties": {
+              "VpcId": { "Ref": "VPC" },
+              "AvailabilityZone": "us-east-1b",
+              "CidrBlock": "10.0.3.0/24",
+              "MapPublicIpOnLaunch": "true"
+          }
+      },
+      "PublicSubnet1RouteTableAssociation" : {
+         "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+         "Properties" : {
+            "SubnetId" : { "Ref" : "venkatPublicSubnet1" },
+            "RouteTableId" : { "Ref" : "PublicRouteTable" }
+         }
+      },
+      "PrivateSubnet1RouteTableAssociation" : {
+         "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+         "Properties" : {
+            "SubnetId" : { "Ref" : "venkatPrivateSubnet1" },
+            "RouteTableId" : { "Ref" : "PrivateRouteTable" }
+         }
+      },
+      "PublicSubnet2RouteTableAssociation" : {
+         "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+         "Properties" : {
+            "SubnetId" : {"Ref" : "venkatPublicSubnet2"} ,
+            "RouteTableId" : { "Ref" : "PublicRouteTable" }
+         }
+      },
+      "PrivateSubnet2RouteTableAssociation" : {
+         "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+         "Properties" : {
+            "SubnetId" : {"Ref" : "venkatPrivateSubnet2"},
+            "RouteTableId" : { "Ref" : "PrivateRouteTable" }
+         }
+      },
+      "NatGateway" : {
+          "DependsOn" : "AttachGateway",
+          "Type" : "AWS::EC2::NatGateway",
+          "Properties" : {
+            "AllocationId" : { "Fn::GetAtt" : ["EIP", "AllocationId"]},
+            "SubnetId" : { "Ref" : "venkatPublicSubnet1"}
+          }
+        },
+        "EIP" : {
+          "Type" : "AWS::EC2::EIP",
+          "Properties" : {
+          "Domain" : "VPC"
+          }
+        },
+        "InternetGateway" : {
+          "Type" : "AWS::EC2::InternetGateway",
+          "Properties" : {
+            "Tags" : [ {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} } ]
+          }
+        },
+  "AttachGateway" : {
+     "Type" : "AWS::EC2::VPCGatewayAttachment",
+     "Properties" : {
+       "VpcId" : { "Ref" : "VPC" },
+       "InternetGatewayId" : { "Ref" : "InternetGateway" }
+     }
+  },
+  "PublicRouteTable" : {
+    "Type" : "AWS::EC2::RouteTable",
+    "Properties" : {
+      "VpcId" : {"Ref" : "VPC"},
+      "Tags" : [ {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} } ]
+    }
+  },
+    "PrivateRouteTable" : {
+    "Type" : "AWS::EC2::RouteTable",
+    "Properties" : {
+      "VpcId" : {"Ref" : "VPC"},
+      "Tags" : [ {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} } ]
+    }
+  },
+  "publicRoute" : {
+    "Type" : "AWS::EC2::Route",
+    "DependsOn" : "AttachGateway",
+    "Properties" : {
+      "RouteTableId" : { "Ref" : "PublicRouteTable" },
+      "DestinationCidrBlock" : "0.0.0.0/0",
+      "GatewayId" : { "Ref" : "InternetGateway" }
+    }
+  },
+    "privateRoute" : {
+    "Type" : "AWS::EC2::Route",
+    "DependsOn" : "AttachGateway",
+    "Properties" : {
+      "RouteTableId" : { "Ref" : "PrivateRouteTable" },
+      "DestinationCidrBlock" : "0.0.0.0/0",
+      "NatGatewayId" : { "Ref" : "NatGateway" }
+    }
+  },
+  "VenkataCFTBastion":{
+    "Type": "AWS::EC2::Instance",
+    "Properties": {
+      "AvailabilityZone": "us-east-1b",
+      "InstanceType": "t2.micro",
+      "ImageId": "ami-c58c1dd3",
+      "KeyName": { "Ref" : "KeyName" },
+      "NetworkInterfaces": [{
+          "AssociatePublicIpAddress": "true",
+          "DeviceIndex": "0",
+          "GroupSet": [{ "Ref": "PublicSecurityGroup" }],
+          "SubnetId": { "Ref":"venkatPublicSubnet2" }
+      }],
+      "BlockDeviceMappings": [{
+          "DeviceName": "/dev/sdm",
+          "Ebs": {
+            "VolumeType": "io1",
+            "Iops": "100",
+            "DeleteOnTermination": "false",
+            "VolumeSize": "8"
+          }
+      }],
+      "Tags" : [{"Key": "Name", "Value":"VenkataCFTBastion"}, {"Key": "Owner", "Value": "venkata.bandreddi"}, {"Key": "Environment", "Value": "Testing"}, {"Key": "ExpirationDate", "Value": "2017-12-12"}, {"Key": "Project", "Value": "Trainee"}]
+    }
+    },
+    "VenkataCFTBitnami": {
+				"Type": "AWS::EC2::Instance",
+				"Properties": {
+					"AvailabilityZone": "us-east-1a",
+					"InstanceType": "t2.micro",
+					"ImageId": "ami-89f68a9f",
+					"KeyName": { "Ref" : "KeyName" },
+					"NetworkInterfaces": [{
+							"AssociatePublicIpAddress": "false",
+							"DeviceIndex": "0",
+							"GroupSet": [{ "Ref": "WebServerSecurityGroup" }],
+							"SubnetId": { "Ref":"venkatPrivateSubnet1" }
+					}],
+					"BlockDeviceMappings": [{
+							"DeviceName": "/dev/sdm",
+							"Ebs": {
+								"VolumeType": "io1",
+								"Iops": "100",
+								"DeleteOnTermination": "false",
+								"VolumeSize": "8"
+							}
+					}],
+					"Tags" : [{"Key": "Name", "Value":"VenkataCFTBitnami"}, {"Key": "Owner", "Value": "venkata.bandreddi"}, {"Key": "Environment", "Value": "Testing"}, {"Key": "ExpirationDate", "Value": "2017-12-12"}, {"Key": "Project", "Value": "Trainee"}]
+				}
+        },
+      "VenkataCHEFLAMP": {
+        "Type": "AWS::EC2::Instance",
+        "Properties": {
+          "AvailabilityZone": "us-east-1a",
+          "InstanceType": "t2.micro",
+          "ImageId": "ami-a4c7edb2",
+          "KeyName": { "Ref" : "KeyName" },
+          "UserData": { "Fn::Base64" : { "Fn::Join" : ["", [
+                  "#!/bin/bash \n ",
+                  "sudo yum update -y \n",
+                  "sudo su \n",
+                  "cd \n",
+                  "cd ~ \n",
+                  "curl -L https://www.opscode.com/chef/install.sh | bash \n",
+                  "chef -v \n",
+                  "curl https://omnitruck.chef.io/install.sh | sudo bash -s -- -P chefdk -c ^Cable -v 0.18.30 \n",
+                  "wget https://s3.amazonaws.com/venkatarean/LAMP.zip \n",
+                  "yum install zip \n",
+                  "unzip LAMP.zip \n",
+                  "rm LAMP.zip \n",
+                  "wget https://s3.amazonaws.com/venkatarean/web.json \n",
+                  "wget https://s3.amazonaws.com/venkatarean/solo.rb \n",
+                  "chef-solo -c solo.rb -j web.json \n",
+                  "echo '<?php phpinfo(); ?>' > /var/www/html/phpinfo.php \n",
+                  "chef-solo -c solo.rb -j web.json \n"
+            ]]}},
+          "NetworkInterfaces": [{
+              "AssociatePublicIpAddress": "false",
+              "DeviceIndex": "0",
+              "GroupSet": [{ "Ref": "WebServerSecurityGroup" }],
+              "SubnetId": { "Ref":"venkatPrivateSubnet1" }
+          }],
+          "BlockDeviceMappings": [{
+              "DeviceName": "/dev/sdm",
+              "Ebs": {
+                "VolumeType": "io1",
+                "Iops": "100",
+                "DeleteOnTermination": "false",
+                "VolumeSize": "8"
+              }
+          }],
+          "Tags" : [{"Key": "Name", "Value":"VenkataCHEFLAMP"}, {"Key": "Owner", "Value": "venkata.bandreddi"}, {"Key": "Environment", "Value": "Testing"}, {"Key": "ExpirationDate", "Value": "2017-12-12"}, {"Key": "Project", "Value": "Trainee"}]
+        }
+        },
+      "VenkataCFTELB" : {
+        "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+        "Properties" : {
+          "CrossZone" : "true",
+          "ConnectionSettings" : { "IdleTimeout" : "60"},
+          "ConnectionDrainingPolicy" :  { "Enabled" : "true", "Timeout" : "300"},
+          "Subnets": [{ "Ref":"venkatPublicSubnet1" }, { "Ref":"venkatPublicSubnet2" }],
+          "Instances" : [
+            { "Ref" : "VenkataCFTBitnami" },
+            { "Ref" : "VenkataCHEFLAMP" }
+          ],
+          "Listeners" : [ { "LoadBalancerPort" : "80", "InstancePort" : "80", "Protocol" : "HTTP"} ],
+
+        "HealthCheck" : {
+            "Target" : "TCP:80",
+            "HealthyThreshold" : "3",
+            "UnhealthyThreshold" : "2",
+            "Interval" : "10",
+            "Timeout" : "5"
+          },
+          "SecurityGroups" : [ {"Ref" : "PublicSecurityGroup"} ],
+          "Tags" : [{"Key": "Name", "Value":"Venkata-CFTELB"}, {"Key": "Owner", "Value": "venkata.bandreddi"}, {"Key": "Environment", "Value": "Testing"}, {"Key": "ExpirationDate", "Value": "2017-12-12"}, {"Key": "Project", "Value": "Trainee"}]
+        }
+      },
+    "PublicSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable HTTP access via port 80",
+        "SecurityGroupIngress" : [
+            {"IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "72.196.48.126/32"},
+		    {"IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "72.196.48.126/32"},
+            {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : "72.196.48.126/32"}
+        ],
+        "VpcId": { "Ref": "VPC" }
+      }
+    },
+    "WebServerSecurityGroup" : {
+    "Type" : "AWS::EC2::SecurityGroup",
+    "Properties" : {
+      "GroupDescription" : "Enable HTTP access via port 80",
+      "SecurityGroupIngress" : [
+          {"IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "10.0.0.0/16"},
+          {"IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "10.0.0.0/16"},
+          {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : "10.0.0.0/16"}
+      ],
+      "VpcId": { "Ref": "VPC" }
+    }
+  }
+}
+}
